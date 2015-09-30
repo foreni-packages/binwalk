@@ -1,6 +1,8 @@
 import os
 import sys
+import curses
 import string
+import platform
 import binwalk.core.common as common
 from binwalk.core.compat import *
 from binwalk.core.module import Module, Option, Kwarg
@@ -29,33 +31,33 @@ class HexDiff(Module):
                    description='Perform a hexdump / diff of a file or files'),
             Option(short='G',
                    long='green',
-                   kwargs={'show_green' : True},
+                   kwargs={'show_green' : True, 'show_blue' : False, 'show_red' : False},
                    description='Only show lines containing bytes that are the same among all files'),
             Option(short='i',
                    long='red',
-                   kwargs={'show_red' : True},
+                   kwargs={'show_red' : True, 'show_blue' : False, 'show_green' : False},
                    description='Only show lines containing bytes that are different among all files'),
             Option(short='U',
                    long='blue',
-                   kwargs={'show_blue' : True},
+                   kwargs={'show_blue' : True, 'show_red' : False, 'show_green' : False},
                    description='Only show lines containing bytes that are different among some files'),
             Option(short='w',
                    long='terse',
                    kwargs={'terse' : True},
                    description='Diff all files, but only display a hex dump of the first file'),
     ]
-
+    
     KWARGS = [
-            Kwarg(name='show_red', default=False),
-            Kwarg(name='show_blue', default=False),
-            Kwarg(name='show_green', default=False),
+            Kwarg(name='show_red', default=True),
+            Kwarg(name='show_blue', default=True),
+            Kwarg(name='show_green', default=True),
             Kwarg(name='terse', default=False),
             Kwarg(name='enabled', default=False),
     ]
 
     RESULT_FORMAT = "%s\n"
     RESULT = ['display']
-
+    
     def _no_colorize(self, c, color="red", bold=True):
         return c
 
@@ -105,10 +107,10 @@ class HexDiff(Module):
                 break
 
         hexbyte = self.colorize("%.2X" % ord(byte), color)
-
+        
         if byte not in string.printable or byte in string.whitespace:
             byte = "."
-
+        
         asciibyte = self.colorize(byte, color)
 
         return (hexbyte, asciibyte)
@@ -162,17 +164,17 @@ class HexDiff(Module):
             else:
                 display = self.CUSTOM_DISPLAY_FORMAT % (offset, line)
                 sep_count += 1
-
+            
             if line != self.SKIPPED_LINE or last_line != line:
                 self.result(offset=offset, description=line, display=display)
 
             last_line = line
             loop_count += 1
-
+                
     def init(self):
-        # To mimic expected behavior, if all options are False, we show everything
-        if not any([self.show_red, self.show_green, self.show_blue]):
-            self.show_red = self.show_green = self.show_blue = True
+        # Disable the invalid description auto-filtering feature.
+        # This will not affect our own validation.
+        self.config.filter.show_invalid_results = True
 
         # Always disable terminal formatting, as it won't work properly with colorized output
         self.config.display.fit_to_screen = False
@@ -183,13 +185,7 @@ class HexDiff(Module):
             self.block = self.DEFAULT_BLOCK_SIZE
 
         # Build a list of files to hexdiff
-        self.hex_target_files = []
-        while True:
-            f = self.next_file(close_previous=False)
-            if not f:
-                break
-            else:
-                self.hex_target_files.append(f)
+        self.hex_target_files = [x for x in iter(self.next_file, None)]
 
         # Build the header format string
         header_width = (self.block * 4) + 2
@@ -205,8 +201,7 @@ class HexDiff(Module):
             self.HEADER = self.HEADER[0]
 
         # Set up the tty for colorization, if it is supported
-        if hasattr(sys.stderr, 'isatty') and sys.stderr.isatty() and not common.MSWindows():
-            import curses
+        if hasattr(sys.stderr, 'isatty') and sys.stderr.isatty() and platform.system() != 'Windows':
             curses.setupterm()
             self.colorize = self._colorize
         else:

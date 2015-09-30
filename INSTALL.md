@@ -1,134 +1,101 @@
 Before You Start
 ================
 
-Binwalk supports Python 2.7 - 3.x. Although most systems have Python2.7 set as their default Python interpreter, binwalk does run faster in Python3. Installation procedures for both are provided below.
+Binwalk supports Python 2.7 - 3.x. Although binwalk is slightly faster in Python 3, the Python OpenGL bindings are still experimental for Python 3, so Python 2.7 is recommended.
+
+The following installation procedures assume that you are installing binwalk to be run using Python 2.7. If you want to use binwalk in Python 3, some package
+names and installation procedures may differ slightly.
 
 Installation
 ============
 
-Installation follows the typical Python installation procedure:
+Installation follows the typical configure/make process (standard development tools such as gcc, make, and Python must be installed in order to build):
 
-```bash
-# Python2.7
-$ sudo python setup.py install
-```
+    $ ./configure
+    $ make
+    $ sudo make install
 
-```bash
-# Python3.x
-$ sudo python3 setup.py install
-```
+Binwalk's core features will work out of the box without any additional dependencies. However, to take advantage of binwalk's graphing and extraction capabilities, multiple supporting utilities/packages need to be installed.
 
-**NOTE**: Older versions of binwalk (e.g., v1.0) are not compatible with the latest version of binwalk. It is strongly recommended that you uninstall any existing binwalk installations before installing the latest version in order to avoid API conflicts.
+To ease "dependency hell", a shell script named `deps.sh` is included which attempts to install all required dependencies for Debian and RedHat based systems:
+
+    $ ./deps.sh
+
+If you are running a different system, or prefer to install these dependencies manually, see the Dependencies section below.
 
 Dependencies
 ============
 
-Besides a Python interpreter, there are no installation dependencies for binwalk. All dependencies are optional run-time dependencies, and unless otherwise specified, are available from most Linux package managers.
-
-Although all binwalk run-time dependencies are optional, the `python-lzma` module is highly recommended for improving the reliability of signature scans. This module is included by default in Python3, but must be installed separately for Python2.7:
-
-```bash
-$ sudo apt-get install python-lzma
-```
+The following dependencies are only required for optional binwalk features, such as file extraction and graphing capabilities. Unless otherwise specified, these dependencies are available from most Linux package managers.
 
 Binwalk uses [pyqtgraph](http://www.pyqtgraph.org) to generate graphs and visualizations, which requires the following: 
 
-```bash
-# Python2.7
-$ sudo apt-get install libqt4-opengl python-opengl python-qt4 python-qt4-gl python-numpy python-scipy python-pip
-$ sudo pip install pyqtgraph
-```
-
-```bash
-# Python3.x
-$ sudo apt-get install libqt4-opengl python3-opengl python3-pyqt4 python3-pyqt4.qtopengl python3-numpy python3-scipy python3-pip
-$ sudo pip3 install pyqtgraph
-```
-
-Binwalk's `--disasm` option requires the [Capstone](http://www.capstone-engine.org/) disassembly framework and its corresponding Python bindings:
-
-```bash
-# Python2.7
-$ sudo apt-get install python-pip
-$ sudo pip install capstone
-```
-
-```bash
-# Python3.x
-$ sudo apt-get install python3-pip
-$ sudo pip3 install capstone
-```
+    libqt4-opengl 
+    python-opengl 
+    python-qt4 
+    python-qt4-gl 
+    python-numpy 
+    python-scipy
 
 Binwalk relies on multiple external utilties in order to automatically extract/decompress files and data:
 
-```bash
-# Install standard extraction utilities
-$ sudo apt-get install mtd-utils gzip bzip2 tar arj lhasa p7zip p7zip-full cabextract cramfsprogs cramfsswap squashfs-tools
-```
+    mtd-utils
+    zlib1g-dev
+    liblzma-dev
+    ncompress
+    gzip
+    bzip2
+    tar
+    arj
+    p7zip
+    cabextract
+    p7zip-full
+    openjdk-6-jdk
+    firmware-mod-kit [https://code.google.com/p/firmware-mod-kit]
 
-```bash
-# Install sasquatch to extract non-standard SquashFS images
-$ sudo apt-get install zlib1g-dev liblzma-dev liblzo2-dev
-$ git clone https://github.com/devttys0/sasquatch
-$ (cd sasquatch && make && sudo make install)
-```
+Bundled Software
+================
 
-```bash
-# Install jefferson to extract JFFS2 file systems
-$ sudo pip install cstruct
-$ git clone https://github.com/sviehb/jefferson
-$ (cd jefferson && sudo python setup.py install)
-```
+For convenience, the following libraries are bundled with binwalk and will not conflict with system-wide libraries:
 
-```bash
-# Install ubi_reader to extract UBIFS file systems
-$ sudo apt-get install liblzo2-dev python-lzo
-$ git clone https://github.com/jrspruitt/ubi_reader
-$ (cd ubi_reader && sudo python setup.py install)
-```
+    libmagic
+    libfuzzy
+    pyqtgraph
 
-```bash
-# Install unstuff (closed source) to extract StuffIt archive files
-$ wget -O - http://my.smithmicro.com/downloads/files/stuffit520.611linux-i386.tar.gz | tar -zxv
-$ sudo cp bin/unstuff /usr/local/bin/
-```
+Installation of any individual bundled library can be disabled at build time:
 
-Note that for Debian/Ubuntu users, all of the above dependencies can be installed automatically using the included `deps.sh` script:
+    $ ./configure --disable-libmagic --disable-libfuzzy --disable-pyqtgraph
 
-```bash
-$ sudo ./deps.sh
-```
+Alternatively, installation of all bundled libraries can be disabled at build time:
 
-Installing the IDA Plugin
-=========================
+    $ ./configure --disable-bundles
 
-If IDA is installed on your system, you may optionally install the binwalk IDA plugin:
+If a bundled library is disabled, the equivalent library must be installed to a standard system library location (e.g., `/usr/lib`, `/usr/local/lib`, etc) in order for binwalk to function properly.
 
-```bash
-$ python setup.py idainstall --idadir=/home/user/ida
-```
+**Note:** If the bundled libmagic library is not used, be aware that:
 
-Likewise, the binwalk IDA plugin can be uninstalled:
+1. Some versions of libmagic have known bugs that are triggered by binwalk under some circumstances.
+2. Minor version releases of libmagic may not be backwards compatible with each other and installation of the wrong version of libmagic may cause binwalk to fail to function properly. 
+3. Conversely, updating libmagic to a version that works with binwalk may cause other utilities that rely on libmagic to fail. 
 
-```bash
-$ python setup.py idauninstall --idadir=/home/user/ida
-```
+Currently, the following libmagic versions are known to work properly with binwalk (other versions may or may not work):
+
+    5.18
+    5.19
 
 
-Uninstalling Binwalk
-====================
+Specifying a Python Interpreter
+===============================
 
-If binwalk has been installed to a standard system location (e.g., via `setup.py install`), it can be removed by running:
+The default python interpreter used during install is the system-wide `python` interpreter. A different interpreter (e.g., `python2`, `python3`) can be specified at build time:
 
-```bash
-# Python2.7
-$ sudo python setup.py uninstall
-```
+    $ ./configure --with-python=python3
 
-```bash
-# Python3
-$ sudo python3 setup.py uninstall
-```
 
-Note that this does _not_ remove any of the manually installed dependencies.
+Uninstallation
+==============
+
+The following command will remove binwalk from your system. Note that this will *not* remove manually installed packages, or utilities installed via deps.sh:
+
+    $ sudo make uninstall
 

@@ -11,22 +11,25 @@ class LZMAModPlugin(binwalk.core.plugin.Plugin):
     '''
     MODULES = ['Signature']
 
-    FAKE_LZMA_SIZE = "\xFF\xFF\xFF\xFF\xFF\xFF\xFF\xFF"
+    FAKE_LZMA_SIZE = "\x00\x00\x00\x10\x00\x00\x00\x00"
     SIGNATURE = "lzma compressed data"
 
     def init(self):
         self.original_cmd = ''
 
-        # Replace the first existing LZMA extraction command with our own
-        for rule in self.module.extractor.match(self.SIGNATURE):
-            self.original_cmd = rule['cmd']
-            rule['cmd'] = self.lzma_cable_extractor
-            break
+        # Replace the existing LZMA extraction command with our own
+        # Note that this assumes that there is *one* LZMA extraction command...
+        rules = self.module.extractor.get_rules()
+        for i in range(0, len(rules)):
+            if rules[i]['regex'] and rules[i]['cmd'] and rules[i]['regex'].match(self.SIGNATURE):
+                self.original_cmd = rules[i]['cmd']
+                rules[i]['cmd'] = self.lzma_cable_extractor
+                break
 
     def lzma_cable_extractor(self, fname):
         # Try extracting the LZMA file without modification first
         result = self.module.extractor.execute(self.original_cmd, fname)
-
+        
         # If the external extractor was successul (True) or didn't exist (None), don't do anything.
         if result not in [True, None]:
             out_name = os.path.splitext(fname)[0] + '-patched' + os.path.splitext(fname)[1]
@@ -38,14 +41,14 @@ class LZMAModPlugin(binwalk.core.plugin.Plugin):
 
             while i < fp_in.length:
                 (data, dlen) = fp_in.read_block()
-
+                
                 if i == 0:
                     out_data = data[0:5] + self.FAKE_LZMA_SIZE + data[5:]
                 else:
                     out_data = data
-
+                
                 fp_out.write(out_data)
-
+    
                 i += dlen
 
             fp_in.close()
@@ -53,9 +56,7 @@ class LZMAModPlugin(binwalk.core.plugin.Plugin):
 
             # Overwrite the original file so that it can be cleaned up if -r was specified
             shutil.move(out_name, fname)
-            result = self.module.extractor.execute(self.original_cmd, fname)
-
-        return result
+            self.module.extractor.execute(self.original_cmd, fname)
 
     def scan(self, result):
         # The modified cable modem LZMA headers all have valid dictionary sizes and a properties byte of 0x5D.

@@ -1,0 +1,55 @@
+export CC=@CC@
+export CFLAGS=@CFLAGS@
+export SONAME=@SONAME@
+export SOEXT=@SOEXT@
+export prefix=@prefix@
+export exec_prefix=@exec_prefix@
+export LIBDIR=@libdir@
+export INSTALL_OPTIONS=@INSTALL_OPTIONS@
+export PLATFORM=@PLATFORM@
+export BUILD_MAGIC=@BUILD_MAGIC@
+export BUILD_FUZZY=@BUILD_FUZZY@
+export BUILD_PYQTGRAPH=@BUILD_PYQTGRAPH@
+export PYLIBDIR="./binwalk/libs"
+
+BUILD_C_LIBS=@BUILD_C_LIBS@
+BUILD_BUNDLES=@BUILD_BUNDLES@
+PYTHON=@PYTHON@
+
+SRC_C_DIR="./src/C"
+SRC_BUNDLES_DIR="./src/bundles"
+
+ifeq ($(strip $(prefix)),)
+	PREFIX=""
+else
+	PREFIX="--prefix=$(prefix)"
+endif
+
+.PHONY: all install build deps clean uninstall
+
+all: build
+
+install: build
+	$(PYTHON) ./setup.py install $(PREFIX)
+
+build:
+	if [ "$(BUILD_C_LIBS)" -eq "1" ]; then make -C $(SRC_C_DIR); fi
+	if [ "$(BUILD_BUNDLES)" -eq "1" ]; then make -C $(SRC_BUNDLES_DIR); fi
+	$(PYTHON) ./setup.py build
+
+deps:
+	./deps.sh
+
+clean:
+	if [ "$(BUILD_C_LIBS)" -eq "1" ]; then make -C $(SRC_C_DIR) clean; fi
+	if [ "$(BUILD_BUNDLES)" -eq "1" ]; then make -C $(SRC_BUNDLES_DIR) clean; fi
+	$(PYTHON) ./setup.py clean
+
+distclean: clean
+	if [ "$(BUILD_C_LIBS)" -eq "1" ]; then make -C $(SRC_C_DIR) distclean; fi
+	if [ "$(BUILD_BUNDLES)" -eq "1" ]; then make -C $(SRC_BUNDLES_DIR) distclean; fi
+	rm -rf Makefile config.* *.cache
+
+uninstall:
+	$(PYTHON) ./setup.py uninstall --pydir=`find $(prefix)/lib -name binwalk | head -1` --pybin=`find $(prefix)/bin -name binwalk | head -1`
+

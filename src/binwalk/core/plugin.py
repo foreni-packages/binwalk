@@ -25,7 +25,7 @@ class Plugin(object):
         Returns None.
         '''
         self.module = module
-
+        
         if not self.MODULES or self.module.name in self.MODULES:
             self._enabled = True
             self.init()
@@ -45,13 +45,7 @@ class Plugin(object):
         '''
         pass
 
-    def new_file(self, fp):
-        '''
-        Child class should override this if needed.
-        '''
-        pass
-
-    def scan(self, module):
+    def scan(self, result):
         '''
         Child class should override this if needed.
         '''
@@ -73,13 +67,36 @@ class Plugins(object):
     The Plugin class constructor is called once prior to scanning a file or set of files.
     The Plugin class destructor (__del__) is called once after scanning all files.
 
-    By default, all plugins are loaded during binwalk signature scans. Plugins that wish to be disabled by
+    The Plugin class can define one or all of the following callback methods:
+
+        o pre_scan(self, fd)
+          This method is called prior to running a scan against a file. It is passed the file object of
+          the file about to be scanned.
+
+        o pre_parser(self, result)
+          This method is called every time any result - valid or invalid - is found in the file being scanned.
+          It is passed a dictionary with one key ('description'), which contains the raw string returned by libmagic.
+          The contents of this dictionary key may be modified as necessary by the plugin.
+
+        o callback(self, results)
+          This method is called every time a valid result is found in the file being scanned. It is passed a 
+          dictionary of results. This dictionary is identical to that passed to Binwalk.single_scan's callback 
+          function, and its contents may be modified as necessary by the plugin.
+
+        o post_scan(self, fd)
+          This method is called after running a scan against a file, but before the file has been closed.
+          It is passed the file object of the scanned file.
+
+    Values returned by pre_scan affect all results during the scan of that particular file.
+    Values returned by callback affect only that specific scan result.
+    Values returned by post_scan are ignored since the scan of that file has already been completed.
+
+    By default, all plugins are loaded during binwalk signature scans. Plugins that wish to be disabled by 
     default may create a class variable named 'ENABLED' and set it to False. If ENABLED is set to False, the
     plugin will only be loaded if it is explicitly named in the plugins whitelist.
     '''
 
     SCAN = 'scan'
-    NEWFILE = 'new_file'
     PRESCAN = 'pre_scan'
     POSTSCAN = 'post_scan'
     MODULE_EXTENSION = '.py'
@@ -87,10 +104,12 @@ class Plugins(object):
     def __init__(self, parent=None):
         self.scan = []
         self.pre_scan = []
-        self.new_file = []
         self.post_scan = []
         self.parent = parent
         self.settings = binwalk.core.settings.Settings()
+
+    def __del__(self):
+        pass
 
     def __enter__(self):
         return self
@@ -98,14 +117,13 @@ class Plugins(object):
     def __exit__(self, t, v, traceback):
         pass
 
-    def _call_plugins(self, callback_list, obj=None):
+    def _call_plugins(self, callback_list, arg):
         for callback in callback_list:
             try:
-                try:
+                if arg:
+                    callback(arg)
+                else:
                     callback()
-                except TypeError:
-                    if obj is not None:
-                        callback(obj)
             except KeyboardInterrupt as e:
                 raise e
             except Exception as e:
@@ -164,8 +182,8 @@ class Plugins(object):
                 for file_name in os.listdir(plugins[key]['path']):
                     if file_name.endswith(self.MODULE_EXTENSION):
                         module = file_name[:-len(self.MODULE_EXTENSION)]
-
-                        try:
+                    
+                        try: 
                             plugin = imp.load_source(module, os.path.join(plugins[key]['path'], file_name))
                             plugin_class = self._find_plugin_class(plugin)
 
@@ -176,7 +194,7 @@ class Plugins(object):
                         except Exception as e:
                             binwalk.core.common.warning("Error loading plugin '%s': %s" % (file_name, str(e)))
                             plugins[key]['enabled'][module] = False
-
+                        
                         try:
                             plugins[key]['descriptions'][module] = plugin_class.__doc__.strip().split('\n')[0]
                         except KeyboardInterrupt as e:
@@ -227,27 +245,17 @@ class Plugins(object):
                     raise e
                 except Exception as e:
                     pass
-
-                try:
-                    self.new_file.append(getattr(class_instance, self.NEWFILE))
-                except KeyboardInterrupt as e:
-                    raise e
-                except Exception as e:
-                    pass
-
+                            
             except KeyboardInterrupt as e:
                 raise e
             except Exception as e:
                 binwalk.core.common.warning("Failed to load plugin module '%s': %s" % (module, str(e)))
 
     def pre_scan_callbacks(self, obj):
-        return self._call_plugins(self.pre_scan)
-
-    def new_file_callbacks(self, fp):
-        return self._call_plugins(self.new_file, fp)
+        return self._call_plugins(self.pre_scan, None)
 
     def post_scan_callbacks(self, obj):
-        return self._call_plugins(self.post_scan)
+        return self._call_plugins(self.post_scan, None)
 
     def scan_callbacks(self, obj):
         return self._call_plugins(self.scan, obj)
